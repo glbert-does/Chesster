@@ -23,8 +23,16 @@ describe('config types', function () {
 
         // These are never actually used
         slackTokens: {
-            lichess4545: 'foo',
-            chesster: 'foo',
+            lichess4545: {
+                token: 'foo',
+                signingSecret: 'foo',
+                appToken: 'foo',
+            },
+            forwarding: {
+                token: 'foo',
+                signingSecret: 'foo',
+                appToken: 'foo',
+            },
         },
         winston: {
             domain: 'chesster',

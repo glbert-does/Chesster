@@ -1,13 +1,14 @@
 // -----------------------------------------------------------------------------
 // Bot / Slack related helpers
 // -----------------------------------------------------------------------------
-import { RTMClient } from '@slack/rtm-api'
+import { App } from '@slack/bolt'
+
 import {
     WebClient,
     WebAPICallResult,
     ChatPostMessageArguments,
 } from '@slack/web-api'
-import _ from 'lodash'
+import _, { update } from 'lodash'
 import * as winston from 'winston'
 import moment from 'moment'
 
@@ -278,7 +279,7 @@ export interface MemberJoinedChannel {
     channel: string
     channel_type: string
     team: string
-    inviter: string
+    inviter?: string
 }
 export type OnEvent = MemberJoinedChannel
 export function isMemberJoinedChannelEvent(
@@ -533,20 +534,35 @@ export class SlackEntityLookup<SlackEntity extends SlackEntityWithNameAndId> {
         return []
     }
 
+    // In SlackEntityLookup class, update the add method:
     add(entity: SlackEntity) {
+        // Always add by ID
         this._addByIdWithDuplicate(entity.id.toUpperCase(), entity)
+
+        // Special handling for DM channels (they won't have names)
+        if (entity.id.startsWith('D')) {
+            // For DM channels, we just store them by ID and don't require names
+            return
+        }
+
+        // Warning for non-DM entities without names
         if (entity.name === undefined) {
             this.log.warn(`${entity.id} does not have a name`)
             return
         }
-        const slackName = entity.name.toLowerCase()
-        this._addByNameWithDuplicate(slackName, entity)
+
+        // Add by name if it exists
+        if (entity.name) {
+            const slackName = entity.name.toLowerCase()
+            this._addByNameWithDuplicate(slackName, entity)
+        }
+
+        // Add by lichess username if it exists
         if (entity.lichess_username) {
             const lichessId = entity.lichess_username.toLowerCase()
             this._addByNameWithDuplicate(lichessId, entity)
         }
     }
-
     getId(name: string): string | undefined {
         const entity = this.byName[name.toLowerCase()]
         if (!entity) {
@@ -578,21 +594,23 @@ export class SlackEntityLookup<SlackEntity extends SlackEntityWithNameAndId> {
     }
 }
 
+export type SlackName = 'forwarding' | 'lichess4545'
+
 export class SlackBot {
     private log: LogWithPrefix
     public config: config.ChessterConfig
-    private token: string
     public users: SlackEntityLookup<LeagueMember>
     public channels: SlackEntityLookup<SlackChannel>
-    public rtm: RTMClient
+    // public rtm: RTMClient
     public web: WebClient
     public controller?: SlackBotSelf
     private team?: SlackTeam
     private refreshCount = 0
     private listeners: SlackRTMEventListenerOptions[] = []
+    private app: App
 
     constructor(
-        public slackName: string,
+        public slackName: SlackName,
         public configFile = './config/config.js',
         public debug = false,
         public connectToModels = true,
@@ -604,84 +622,91 @@ export class SlackBot {
         this.config = config.ChessterConfigDecoder.decodeJSON(
             JSON.stringify(require(this.configFile))
         )
-        this.token = this.config.slackTokens[this.slackName]
 
-        if (!this.token) {
-            const error = `Failed to load token for ${this.slackName} from ${this.configFile}`
-            this.log.error(error)
-            throw new Error(error)
-        }
+        // May need changing with events API migration
         this.users = new SlackEntityLookup<LeagueMember>(
             slackName,
             'Users',
             '@'
         )
+        // May need changing with events API migration
         this.channels = new SlackEntityLookup<SlackChannel>(
             slackName,
             'Channels',
             '#'
         )
 
-        this.rtm = new RTMClient(this.token)
-        this.web = new WebClient(this.token)
+        const tokens =
+            this.slackName === 'lichess4545'
+                ? this.config.slackTokens.lichess4545
+                : this.config.slackTokens.forwarding
+
+        this.web = new WebClient(tokens.token)
+
+        this.app = new App({
+            token: tokens.token,
+            signingSecret: tokens.signingSecret,
+            socketMode: true,
+            appToken: tokens.appToken,
+        })
     }
     async start() {
-        // Connect to Slack
-        const { self, team } = await this.rtm.start()
-        this.controller = self as SlackBotSelf
-        this.team = team as SlackTeam
+        this.log.info('Starting Chesster with Events API')
 
-        // Listen to events that we need
-        // https://api.slack.com/events
-        this.rtm.on('goodbye', () => {
-            // TODO: figure out how to better handle this
-            this.log.error(
-                'RTM connection closing unexpectedly. I am going down.'
-            )
-            process.exit(1)
-        })
+        // Turns chesster on
+        await this.app.start()
+        this.log.info('Bolt app started successfully')
 
-        // -----------------------------------------------------------------------------
-        // Log lifecycle events
-        this.rtm.on('connecting', () => {
-            this.log.info('Connecting')
-        })
-        this.rtm.on('authenticated', (connectData) => {
-            this.log.info(`Authenticating: ${JSON.stringify(connectData)}`)
-        })
-        this.rtm.on('connected', () => {
-            this.log.info('Connected')
-        })
-        this.rtm.on('ready', () => {
-            this.log.info('Ready')
-        })
-        this.rtm.on('disconnecting', () => {
-            this.log.info('Disconnecting')
-        })
-        this.rtm.on('reconnecting', () => {
-            this.log.info('Reconnecting')
-        })
-        this.rtm.on('disconnected', (error) => {
-            this.log.error(`Disconnecting: ${JSON.stringify(error)}`)
-        })
-        this.rtm.on('error', (error) => {
-            this.log.error(`Error: ${JSON.stringify(error)}`)
-        })
-        this.rtm.on('unable_to_rtm_start', (error) => {
-            this.log.error(`Unable to RTM start: ${JSON.stringify(error)}`)
-        })
-
-        // connect to the database
+        // Connect to the database FIRST
         if (this.connectToModels) {
-            await models.connect(this.config)
+            try {
+                winston.info(
+                    '[SlackBot.start()] Attempting to connect to database...'
+                )
+
+                await models.connect(this.config)
+                winston.info('Database connected successfully')
+            } catch (error) {
+                this.log.error(`Database connection error: ${error}`)
+                // Continue execution even after database error
+                this.log.warn(
+                    'Continuing without database connection (features requiring database will not work)'
+                )
+            }
+        }
+        // Get bot information to set controller/self ID SECOND
+        try {
+            const authInfo = await this.app.client.auth.test()
+            this.log.info(`Auth info: ${JSON.stringify(authInfo)}`)
+
+            if (authInfo.ok) {
+                this.controller = {
+                    id: authInfo.user_id as string,
+                    name: authInfo.user as string,
+                }
+                this.log.info(
+                    `Bot controller set - ID: ${this.controller.id}, Name: ${this.controller.name}`
+                )
+            } else {
+                this.log.error('Failed to get bot information')
+            }
+        } catch (error) {
+            this.log.error(`Error getting bot info: ${error}`)
         }
 
-        this.startOnListener()
+        // Set up event listeners LAST - after all data is loaded
+        this.log.info('Setting up event listeners')
+        await this.startOnListener()
+
+        this.log.info('Chesster is ready!')
+
+        this.app.logger.info('Starting app')
 
         // refresh your user and channel list every 10 minutes.
         // used to be every 2 minutes but we started to hit rate limits.
         // would be nice if this was push model, not poll but oh well.
-        await this.refresh(600 * SECONDS)
+        // NOTE: This is intentionally not awaited now, assuming that we want to startup more quickly
+        this.refresh(600 * SECONDS)
 
         if (this.logToThisSlack) {
             // setup logging
@@ -722,9 +747,9 @@ export class SlackBot {
         // @ https://api.slack.com/methods/users.list
         //
         // Iterate over all of the slack users and map them up
-        for await (const page of (this.web.paginate(
-            'users.list'
-        ) as unknown) as AsyncIterable<SlackUserListResponse>) {
+        for await (const page of this.web.paginate('users.list', {
+            limit: 200,
+        }) as unknown as AsyncIterable<SlackUserListResponse>) {
             if (page.ok) {
                 page.members.map((slackUser) => {
                     newUsers.add({
@@ -755,21 +780,38 @@ export class SlackBot {
             this.channels.typePostfix,
             this.channels.idStringPrefix
         )
+        /* TODO: why wasn't this used?
         const newMPIMs = new SlackEntityLookup<SlackChannel>(
             this.channels.slackName,
             this.channels.typePostfix,
             this.channels.idStringPrefix
         )
-        // @ https://api.slack.com/methods/conversations.list
-        for await (const page of (this.web.paginate('conversations.list', {
-            types: 'public_channel,private_channel',
-            exclude_archived: true,
-        }) as unknown) as AsyncIterable<SlackChannelListResponse>) {
+        */
+        const updateChannels = (page: SlackChannelListResponse) => {
             if (page.ok) {
                 page.channels.map((c) => {
                     if (c.is_channel) newChannels.add(c)
                 })
             }
+        }
+        this.log.info('Updating public channels!')
+        // @ https://api.slack.com/methods/conversations.list
+        for await (const page of this.web.paginate('conversations.list', {
+            types: 'public_channel',
+            exclude_archived: true,
+            limit: 200,
+        }) as unknown as AsyncIterable<SlackChannelListResponse>) {
+            updateChannels(page)
+        }
+
+        this.log.info('Updating private channels!')
+        // @ https://api.slack.com/methods/conversations.list
+        for await (const page of this.web.paginate('conversations.list', {
+            types: 'private_channel',
+            exclude_archived: true,
+            limit: 200,
+        }) as unknown as AsyncIterable<SlackChannelListResponse>) {
+            updateChannels(page)
         }
         this.channels = newChannels
     }
@@ -820,7 +862,7 @@ export class SlackBot {
     }
     async refresh(delay: number) {
         return criticalPath(
-            new Promise((resolve) => {
+            new Promise<void>((resolve) => {
                 this.refreshCount++
                 this.log.info(`doing refresh ${this.refreshCount}`)
 
@@ -883,7 +925,6 @@ ${usernames.join(', ')}`
             text: response,
         })
     }
-
     async say(options: ChatPostMessageArguments) {
         // Replace user links in the form <@user> with <@U12345|user>
         if (options.text) {
@@ -899,7 +940,18 @@ ${usernames.join(', ')}`
             )
         }
         options.as_user = true
-        return this.web.chat.postMessage(options)
+
+        return this.app.client.chat.postMessage({
+            ...options,
+            attachments: [],
+            reply_broadcast: options.reply_broadcast
+                ? options.reply_broadcast
+                : false,
+            thread_ts: options.thread_ts ? options.thread_ts : '',
+            as_user: true,
+            icon_url: undefined,
+            icon_emoji: undefined,
+        })
     }
 
     async getChannel(channelId: string): Promise<SlackChannel | undefined> {
@@ -929,6 +981,7 @@ ${usernames.join(', ')}`
         return undefined
     }
 
+    // Events API migration: I don't believe this needs changes because webClient is the same
     async react(message: CommandMessage, emoji: string) {
         if (!message.ts) return
         return this.web.reactions.add({
@@ -942,10 +995,22 @@ ${usernames.join(', ')}`
         listener: SlackRTMEventListenerOptions,
         message: CommandMessage
     ) {
+        this.log.info(
+            `handleMatch called with pattern: ${listener.patterns
+                .map((p) => p.source)
+                .join(', ')} and message: ${message.text}`
+        )
+
         let allowedTypes = ['command', 'league_command']
         let member: LeagueMember | undefined
         if (message.user) {
             member = this.users.getByNameOrID(message.user)
+            // Add this debugging line
+            this.log.info(
+                `Handle match found user: ${
+                    member?.name || 'UNDEFINED'
+                } for ID: ${message.user}`
+            )
         }
         const _league = getLeague(this, message, false)
         if (!_league || !member) {
@@ -962,18 +1027,28 @@ ${usernames.join(', ')}`
                     listener.type === 'command' &&
                     allowedTypes.indexOf('command') !== -1
                 ) {
-                    _.map(listener.middleware, (m) =>
-                        m(this, { member, ...message })
-                    )
+                    // Run any middleware first
+                    if (listener.middleware) {
+                        listener.middleware.forEach((m) =>
+                            m(this, { member, ...message })
+                        )
+                    }
+
+                    // Execute the command callback - THIS IS THE CRUCIAL PART
                     listener.callback(this, { member, ...message })
+
+                    // Log after execution
+                    this.log.info('Command executed successfully')
                 } else if (
                     listener.type === 'league_command' &&
                     allowedTypes.indexOf('league_command') !== -1
                 ) {
                     if (_league && member) {
-                        // Typescript should have been able know that they are set appropriately
-                        // here.
-                        _.map(listener.middleware, (m) => m(this, message))
+                        // Run middleware first
+                        if (listener.middleware) {
+                            listener.middleware.forEach((m) => m(this, message))
+                        }
+
                         const leagueCommandMessage: LeagueCommandMessage = {
                             ...message,
                             league: _league,
@@ -982,12 +1057,23 @@ ${usernames.join(', ')}`
                                 member.lichess_username
                             ),
                         }
+
+                        // Execute command
                         listener.callback(this, leagueCommandMessage)
+
+                        this.log.info('League command executed successfully')
                     } else {
-                        this.log.warn('Typescript failed me')
+                        this.log.warn(
+                            'Cannot execute league command - missing league or member'
+                        )
                     }
                 }
             } catch (error) {
+                this.log.error(
+                    `Error in command execution: ${
+                        error instanceof Error ? error.message : String(error)
+                    }`
+                )
                 if (error instanceof StopControllerError) {
                     this.log.error(
                         `Middleware asked to not process controller callback: ${JSON.stringify(
@@ -997,60 +1083,74 @@ ${usernames.join(', ')}`
                 }
             }
         } catch (e) {
-            this.log.info(`Error handling event: ${message}`)
+            this.log.error(
+                `Critical error handling event: ${
+                    e instanceof Error ? e.message : String(e)
+                }`
+            )
             this.say({
                 channel: message.channel.id,
-                text:
-                    'Something has gone terribly terribly wrong. Please forgive me.',
+                text: 'Something has gone terribly terribly wrong. Please forgive me.',
             })
         }
     }
 
     async startOnListener() {
-        this.rtm.on('message', async (event: SlackMessage) => {
+        // Set up event handler for direct messages and ambient messages
+        // Messages that ping chesster directly are handled in `this.app.event('app_mention', ...)`
+        this.app.message(/.*/, async ({ message, say }) => {
             try {
-                const channel = await this.getChannel(event.channel)
+                // TODO: this should be handled better
+                if (message.subtype === 'message_changed') return
+                if (message.subtype === 'message_deleted') return
+                if (message.subtype === 'message_replied') return
+                if (message.subtype === 'channel_archive') return
+                if (message.subtype === 'channel_unarchive') return
+                if (message.subtype === 'channel_join') return
+                if (message.subtype === 'channel_leave') return
+                if (message.subtype === 'channel_name') return
+                if (message.subtype === 'channel_posting_permissions') return
+                if (message.subtype === 'channel_purpose') return
+                if (message.subtype === 'channel_topic') return
+                if (message.subtype === 'ekm_access_denied') return
+                const channel = await this.getChannel(message.channel)
                 if (!channel) {
                     this.log.warn(
-                        `Unable to get details for channel: ${event.channel}`
+                        `Unable to get details for channel: ${message.channel}`
                     )
                     return
                 }
+
+                // TODO: This should be handled better.
+                const user = message.user || ''
+                const text = message.text || ''
+
                 const chessterMessage: ChessterMessage = {
-                    ...event,
                     type: 'message',
+                    user,
                     channel,
+                    text,
+                    ts: message.ts,
+                    // @ts-ignore TODO: fix this.
+                    attachments: message.attachments || [],
                     isPingModerator: false,
                 }
 
-                const isBotMessage =
-                    event.subtype === 'bot_message' || event.bot_id
-                const isDirectMessage =
-                    channel &&
-                    channel.is_im &&
-                    !channel.is_group &&
-                    !isBotMessage
-                const isDirectMention =
-                    chessterMessage.text.indexOf(
-                        `<@${this.controller?.id}>`
-                    ) !== -1 && !isBotMessage
-                const isAmbient = !(
-                    isDirectMention ||
-                    isDirectMessage ||
-                    isBotMessage
+                // Message context
+                const isDirectMessage = channel?.is_im && !channel?.is_group
+                const isAmbient = !isDirectMessage
+                const isBotMessage = message.subtype === 'bot_message'
+
+                this.log.debug(
+                    `Message context: DM=${isDirectMessage}, ambient=${isAmbient}, bot=${isBotMessage}`
                 )
-                this.listeners.map(async (listener) => {
+
+                // Process each listener
+                this.listeners.forEach((listener) => {
                     let isWanted = false
-                    let text = event.text
+
                     if (isDirectMessage && wantsDirectMessage(listener)) {
                         isWanted = true
-                    } else if (
-                        isDirectMention &&
-                        wantsDirectMention(listener)
-                    ) {
-                        isWanted = true
-                        text = text.replace(`<@${this.controller?.id}> `, '')
-                        text = text.replace(`<@${this.controller?.id}>`, '')
                     } else if (isAmbient && wantsAmbient(listener)) {
                         isWanted = true
                     } else if (isBotMessage && wantsBotMessage(listener)) {
@@ -1059,24 +1159,133 @@ ${usernames.join(', ')}`
 
                     if (!isWanted) return
 
-                    listener.patterns.some((p) => {
-                        const matches = text.match(p)
-                        if (!matches) return false
+                    this.log.debug(
+                        `Checking patterns for listener: ${listener.patterns
+                            .map((p) => p.source)
+                            .join(', ')}`
+                    )
+
+                    for (const pattern of listener.patterns) {
+                        const matches = text.match(pattern)
+                        if (!matches) continue
+
+                        this.log.debug(
+                            `Found match for pattern: ${pattern.source}`
+                        )
                         this.handleMatch(listener, {
                             ...chessterMessage,
-                            text: text.trim(),
                             matches,
                         })
-                        return true
-                    })
+                        break
+                    }
                 })
             } catch (error) {
-                this.log.error(
-                    `Uncaught error in handling an rtm message: ${JSON.stringify(
-                        error
-                    )}`
+                this.log.error(`Error handling message: ${error}`)
+                await say(
+                    'Error processing your message. Please try again later.'
                 )
-                this.log.error(`Stack: ${new Error().stack}`)
+            }
+        })
+
+        // Set up event handler for @mentions
+        // Messages that don't ping chesster directly are handled in `this.app.message...`
+        // TODO this.app.event and this.app.message have very similar logic; combine them into a util of some sort
+        this.app.event('app_mention', async ({ event, say }) => {
+            try {
+                const channel = await this.getChannel(event.channel)
+                if (!channel) {
+                    this.log.warn(
+                        `Unable to get details for channel: ${event.channel}`
+                    )
+                    return
+                }
+
+                let text = event.text || ''
+
+                this.log.info(
+                    `Original text: "${text}", controller id: ${
+                        this.controller?.id || 'undefined'
+                    }`
+                )
+
+                if (this.controller?.id) {
+                    text = text.replace(
+                        new RegExp(`<@${this.controller.id}>\\s*`, 'g'),
+                        ''
+                    )
+                    this.log.info(`Text after removing mention: "${text}"`)
+                }
+
+                const chessterMessage: ChessterMessage = {
+                    type: 'message',
+                    user: event.user || '',
+                    channel,
+                    text,
+                    ts: event.ts,
+                    attachments: [],
+                    isPingModerator: false,
+                }
+
+                // Loop through ALL command listeners to find matches
+                let matched = false
+
+                // Find command listeners first
+                for (const listener of this.listeners) {
+                    if (
+                        listener.type === 'command' &&
+                        listener.messageTypes.includes('direct_mention')
+                    ) {
+                        for (const pattern of listener.patterns) {
+                            this.log.info(
+                                `Checking pattern: ${pattern.source} against text: "${text}"`
+                            )
+                            const matches = text.match(pattern)
+                            if (matches) {
+                                this.log.info(
+                                    `✓ MATCHED pattern: ${pattern.source}`
+                                )
+                                matched = true
+                                await this.handleMatch(listener, {
+                                    ...chessterMessage,
+                                    matches,
+                                })
+                                return // Exit after first match
+                            }
+                        }
+                    }
+                }
+
+                // If no command match, try league_command listeners
+                if (!matched) {
+                    for (const listener of this.listeners) {
+                        if (
+                            listener.type === 'league_command' &&
+                            listener.messageTypes.includes('direct_mention')
+                        ) {
+                            for (const pattern of listener.patterns) {
+                                const matches = text.match(pattern)
+                                if (matches) {
+                                    this.log.info(
+                                        `✓ MATCHED league pattern: ${pattern.source}`
+                                    )
+                                    await this.handleMatch(listener, {
+                                        ...chessterMessage,
+                                        matches,
+                                    })
+                                    return // Exit after first match
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (!matched) {
+                    this.log.info(
+                        `No matching listener found for text: "${text}" among ${this.listeners.length} listeners`
+                    )
+                }
+            } catch (error) {
+                this.log.error(`Error handling app_mention: ${error}`)
             }
         })
     }
@@ -1086,8 +1295,10 @@ ${usernames.join(', ')}`
     }
 
     on(options: OnOptions) {
-        return this.rtm.on(options.event, (event) =>
-            options.callback(this, event)
-        )
+        if (options.event === 'member_joined_channel') {
+            this.app.event('member_joined_channel', async ({ event }) => {
+                options.callback(this, event)
+            })
+        }
     }
 }

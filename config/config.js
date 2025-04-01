@@ -1,15 +1,27 @@
 // NOTE: None of these files are committed and for good reason.
-//       You must provide your own.
+// You must provide your own.
 const dotenv = require('dotenv')
 dotenv.config()
 let db = require('./db.js')
-let _4545_SLACK_TOKEN =
-    process.env.CHESSTER_4545_SLACK_TOKEN || "It won't work without this token"
-let CHESSTER_SLACK_TOKEN =
-    process.env.CHESSTER_CHESSTER_SLACK_TOKEN ||
+
+let LICHESS_4545_APP_TOKEN =
+    process.env.LICHESS_4545_APP_TOKEN || "It won't work without this token"
+let LICHESS_4545_SIGNING_SECRET =
+    process.env.LICHESS_4545_SIGNING_SECRET ||
     "It won't work without this token"
+let LICHESS_4545_BOT_TOKEN =
+    process.env.LICHESS_4545_BOT_TOKEN || "It won't work without this token"
+
+let FORWARD_APP_TOKEN =
+    process.env.FORWARD_APP_TOKEN || "It won't work without this token"
+let FORWARD_SIGNING_SECRET =
+    process.env.FORWARD_SIGNING_SECRET || "It won't work without this token"
+let FORWARD_BOT_TOKEN =
+    process.env.FORWARD_BOT_TOKEN || "It won't work without this token"
+
 let HELTOUR_TOKEN =
     process.env.CHESSTER_HELTOUR_TOKEN || "It won't work without this token"
+
 let LICHESS_TOKEN =
     process.env.CHESSTER_LICHESS_TOKEN || "It won't work without this token"
 
@@ -21,9 +33,18 @@ var config = {
     watcherBaseURL: 'https://lichess.org/api/stream/games-by-users',
     watcherToken: LICHESS_TOKEN,
 
+    // These are never actually used, the variables are accessed another way
     slackTokens: {
-        lichess4545: _4545_SLACK_TOKEN,
-        chesster: CHESSTER_SLACK_TOKEN,
+        lichess4545: {
+            token: LICHESS_4545_BOT_TOKEN,
+            signingSecret: LICHESS_4545_SIGNING_SECRET,
+            appToken: LICHESS_4545_APP_TOKEN,
+        },
+        forwarding: {
+            token: FORWARD_BOT_TOKEN,
+            signingSecret: FORWARD_SIGNING_SECRET,
+            appToken: FORWARD_APP_TOKEN,
+        },
     },
     winston: {
         domain: 'chesster',
@@ -278,7 +299,7 @@ var config = {
         chess960scheduling: 'chess960',
     },
     messageForwarding: {
-        channelId: 'G3D6N2HNF',
+        channelId: 'C08HZL49YH0',
     },
     pingMods: {
         C0VCCPMJ8: ['U0J2J60F8'],

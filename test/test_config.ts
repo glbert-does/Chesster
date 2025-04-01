@@ -21,9 +21,18 @@ describe('config types', function () {
         watcherBaseURL: 'https://lichess.org/api/stream/games-by-users',
         watcherToken: 'asdfasdfasdfasdf',
 
+        // These are never actually used
         slackTokens: {
-            lichess4545: 'foo',
-            chesster: 'foo',
+            lichess4545: {
+                token: 'foo',
+                signingSecret: 'foo',
+                appToken: 'foo',
+            },
+            forwarding: {
+                token: 'foo',
+                signingSecret: 'foo',
+                appToken: 'foo',
+            },
         },
         winston: {
             domain: 'chesster',
@@ -58,9 +67,10 @@ describe('config types', function () {
                 gamelinks: {
                     channel: 'team-games',
                     channelId: 'C0CSAHD43',
+                    // TODO events API: Change this time control back from bullet when done testing
                     clock: {
-                        initial: 45,
-                        increment: 45,
+                        initial: 1,
+                        increment: 0,
                     },
                     rated: true,
                     variant: 'standard',
@@ -84,14 +94,12 @@ describe('config types', function () {
                 },
                 links: {
                     faq: 'https://www.lichess4545.com/team4545/document/faq/',
-                    rules:
-                        'https://www.lichess4545.com/team4545/document/rules/',
+                    rules: 'https://www.lichess4545.com/team4545/document/rules/',
                     league: 'https://www.lichess4545.com/team4545/',
                     pairings: 'https://www.lichess4545.com/team4545/pairings/',
                     standings:
                         'https://www.lichess4545.com/team4545/standings/',
-                    guide:
-                        'https://www.lichess4545.com/team4545/document/player-handbook/',
+                    guide: 'https://www.lichess4545.com/team4545/document/player-handbook/',
                     captains:
                         'https://www.lichess4545.com/team4545/document/captains/',
                     registration:
@@ -127,8 +135,8 @@ describe('config types', function () {
                     channel: 'lonewolf-games',
                     channelId: 'C0SD3SCAH',
                     clock: {
-                        initial: 30,
-                        increment: 30,
+                        initial: 1,
+                        increment: 0,
                     },
                     rated: true,
                     variant: 'standard',
@@ -149,8 +157,7 @@ describe('config types', function () {
                 },
                 links: {
                     faq: 'https://www.lichess4545.com/lonewolf/document/faq/',
-                    rules:
-                        'https://www.lichess4545.com/lonewolf/document/rules/',
+                    rules: 'https://www.lichess4545.com/lonewolf/document/rules/',
                     league: 'https://www.lichess4545.com/lonewolf/',
                     pairings: 'https://www.lichess4545.com/lonewolf/pairings/',
                     standings:
@@ -202,10 +209,8 @@ describe('config types', function () {
                     channel: '',
                 },
                 links: {
-                    faq:
-                        'https://www.lichess4545.com/blitzbattle/document/faq/',
-                    rules:
-                        'https://www.lichess4545.com/blitzbattle/document/rules/',
+                    faq: 'https://www.lichess4545.com/blitzbattle/document/faq/',
+                    rules: 'https://www.lichess4545.com/blitzbattle/document/rules/',
                     league: 'https://www.lichess4545.com/blitzbattle/',
                     pairings:
                         'https://www.lichess4545.com/blitzbattle/pairings/',
@@ -234,14 +239,14 @@ describe('config types', function () {
                 },
                 results: {
                     channel: 'chess960games',
-                    channelId: 'CAG3R6HL6',
+                    channelId: 'C08KHN4FTUY',
                 },
                 gamelinks: {
                     channel: 'chess960games',
-                    channelId: 'CAG3R6HL6',
+                    channelId: 'C08KHN4FTUY',
                     clock: {
-                        initial: 15,
-                        increment: 15,
+                        initial: 1,
+                        increment: 0,
                     },
                     rated: true,
                     variant: 'chess960',
@@ -262,8 +267,7 @@ describe('config types', function () {
                 },
                 links: {
                     faq: 'https://www.lichess4545.com/chess960/document/faq/',
-                    rules:
-                        'https://www.lichess4545.com/chess960/document/rules/',
+                    rules: 'https://www.lichess4545.com/chess960/document/rules/',
                     league: 'https://www.lichess4545.com/chess960/',
                     pairings: 'https://www.lichess4545.com/chess960/pairings/',
                     standings:
@@ -297,7 +301,7 @@ describe('config types', function () {
             chess960scheduling: 'chess960',
         },
         messageForwarding: {
-            channelId: 'G3D6N2HNF',
+            channelId: 'C08HZL49YH0',
         },
         pingMods: {},
     }

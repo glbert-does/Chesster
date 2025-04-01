@@ -95,6 +95,7 @@ export async function connect(config: ChessterConfig) {
             "We don't support anything but postgresql because I'm lazy"
         )
     }
+
     const sequelize = new Sequelize(
         config.database.name,
         config.database.username,
@@ -103,10 +104,12 @@ export async function connect(config: ChessterConfig) {
     )
 
     try {
+        winston.info('[models.connect()] Attempting to connect to database...')
         await sequelize.authenticate()
+        winston.info('[models.connect()] Database connection successful')
         defineModels(sequelize)
     } catch (e) {
-        winston.error(`[models.connect()] Error connection to db: ${e}`)
+        winston.error(`[models.connect()] Error connecting to db: ${e}`)
         throw e
     }
 }

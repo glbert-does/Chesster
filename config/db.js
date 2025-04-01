@@ -3,6 +3,7 @@ var config = {
         name: 'chesster',
         username: 'chesster',
         password: 'scrappypulpitgourdehinders',
+        database: 'chesster',
         host: 'localhost',
         dialect: 'postgres',
         logging: false,

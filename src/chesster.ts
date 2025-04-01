@@ -33,7 +33,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const adminSlack = new slack.SlackBot(
-    'chesster', // slackName
+    'forwarding', // slackName
     configFile, // configFile
     false, // debug
     false, // connectToModels
@@ -137,18 +137,21 @@ chesster.hears({
     messageTypes: ['direct_message'],
     callback: privateURLs.nomination,
 })
+
 chesster.hears({
     type: 'league_command',
     patterns: [/get notification url/i, /notification/i],
     messageTypes: ['direct_message'],
     callback: privateURLs.notification,
 })
+
 chesster.hears({
     type: 'league_command',
     patterns: [/availability/i, /edit availability/i, /availability edit/i],
     messageTypes: ['direct_message'],
     callback: privateURLs.availability,
 })
+
 chesster.hears({
     type: 'command',
     patterns: [/link/i],
@@ -174,9 +177,13 @@ chesster.hears({
 // commands
 
 function prepareCommandsMessage() {
+    const chessterId = chesster.controller?.id
+        ? `<@${chesster.controller.id}>`
+        : '@chesster'
+
     return (
         'I will respond to the following commands when they are spoken to ' +
-        chesster.users.getIdString('chesster') +
+        chessterId +
         ': \n```' +
         '    [ starter guide ]              ! get the starter guide link; thanks GnarlyGoat!\n' +
         '    [ rules | regulations ]        ! get the rules and regulations.\n' +
@@ -207,14 +214,13 @@ chesster.hears({
     callback: async (bot: slack.SlackBot, message: slack.CommandMessage) => {
         const convo = await bot.startPrivateConversation([message.user])
         bot.say({
-            channel: convo.channel.id,
+            channel: convo.channel!.id!,
             text: prepareCommandsMessage(),
         })
     },
 })
 
 // Channel pings
-
 chesster.hears({
     type: 'command',
     patterns: [/^ping channel$/i],
@@ -232,7 +238,6 @@ chesster.hears({
 })
 
 // welcome
-
 chesster.on({
     event: 'member_joined_channel',
     callback: onboarding.welcomeMessage,
@@ -252,12 +257,12 @@ chesster.hears({
     type: 'command',
     patterns: [/source/i],
     messageTypes: ['direct_message', 'direct_mention'],
-    callback: (bot, message) =>
-        bot.reply(message, chesster.config.links.source),
+    callback: (bot, message) => {
+        bot.reply(message, chesster.config.links.source)
+    },
 })
 
 // Scheduling
-
 // Scheduling will occur on any message
 chesster.hears({
     type: 'league_command',
@@ -308,6 +313,9 @@ chesster.hears({
 
 // subscriptions
 
+// `I'm sorry, but an error occurred processing this subscription command`
+// This was in response to: tell me when a-game-starts in 45+45 for mrscribbles
+// Not sure if that's because the command isn't working, or because of db connection stuff
 chesster.hears({
     type: 'command',
     patterns: [/^tell/i],

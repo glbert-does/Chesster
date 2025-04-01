@@ -659,7 +659,7 @@ export async function ambientScheduling(
                 leagueName,
             }
         )
-    } catch (error) {
+    } catch (error: any) {
         if (error.code === 'not_found') {
             schedulingReplyMissingPairing(bot, message)
         } else if (error.code === 'no_matching_rounds') {
@@ -676,4 +676,3 @@ export async function ambientScheduling(
         )
     }
 }
-

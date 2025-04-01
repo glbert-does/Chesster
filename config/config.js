@@ -137,7 +137,6 @@ var config = {
                 channel: 'lonewolf-games',
                 channelId: 'C0SD3SCAH',
                 clock: {
-                    // Events API TODO: Change time controls back from 1+0
                     initial: 30,
                     increment: 30,
                 },

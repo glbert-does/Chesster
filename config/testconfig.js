@@ -1,7 +1,7 @@
 // NOTE: Neither of these files are committed and for good reason.
 //       You must provide your own.
 const UNSTABLE_BOT_ID = 'C016G6T5QTW'
-const UNSTABLE_BOT_LONEWOLF_ID = 'C08HXSVUH26'
+const UNSTABLE_BOT_LONEWOLF_ID = 'C015V92UJUX'
 
 const LONEWOLF_GAMES_CHANNEL_ID = 'C08JZJNU8UC'
 const LONEWOLF_SCHEDULING_CHANNEL_ID = 'C08K6E8MJNM'
@@ -23,7 +23,7 @@ config['welcome']['channel'] = 'dev-testing-lonewolf'
 const heltourToken = config['heltour']['token']
 
 let heltour = {
-    baseEndpoint: 'http://localhost:8000/api/',
+    baseEndpoint: 'http://127.0.0.1:8000/api/',
     token: config['heltour']['token'],
 }
 let leagues = ['45+45', 'lonewolf', 'blitzbattle', 'chess960']
@@ -61,9 +61,9 @@ config['leagues']['chess960']['gamelinks']['channel'] = 'chess960games'
 
 config['channelMap'][UNSTABLE_BOT_ID] = '45+45'
 config['channelMap']['dev-testing'] = '45+45'
-config['channelMap']['lonewolf-games'] = 'lonewolf'
+config['channelMap']['dev-testing-lonewolf'] = 'lonewolf'
 config['channelMap']['dev-testing-blitz'] = 'blitz'
-config['channelMap'][LONEWOLF_GAMES_CHANNEL_ID] = 'lonewolf'
+config['channelMap'][UNSTABLE_BOT_LONEWOLF_ID] = 'lonewolf'
 
 config['messageForwarding']['channelId'] = 'C08HZL49YH0'
 config['pingMods'] = {

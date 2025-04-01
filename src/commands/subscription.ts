@@ -9,7 +9,6 @@ import * as league from '../league'
 import * as db from '../models'
 import { SlackBot, CommandMessage } from '../slack'
 import { isDefined } from '../utils'
-import * as heltour from '../heltour'
 
 // The emitter we will use.
 import { EventEmitter } from 'events'
@@ -297,7 +296,7 @@ function processTellCommand(
                 target: target.toLowerCase(),
             },
         })
-            .then(([subscription, created]) => {
+            .then(() => {
                 return resolve(
                     `Great! I will tell ${target} when ${event} for ${sourceName} in ${_league.name}`
                 )
@@ -404,7 +403,7 @@ export function register(bot: SlackBot, eventName: string, cb: Callback) {
                                 bot.startPrivateConversation([target])
                                     .then((convo) => {
                                         bot.say({
-                                            channel: convo.channel!.id!,
+                                            channel: convo.channel.id,
                                             text: message,
                                         })
                                         resolve()
@@ -526,21 +525,17 @@ export async function tellMeWhenHandler(
     message: CommandMessage
 ) {
     const convo = await bot.startPrivateConversation([message.user])
-    bot.say({
-        channel: convo.channel!.id!,
-        text: 'Dicks dicks extra dicks',
-    })
     return processTellCommand(bot, message)
         .then((response) => {
             bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: response,
             })
         })
         .catch((error) => {
             winston.error(JSON.stringify(error))
             bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: "I'm sorry, but an error occurred processing this subscription command",
             })
         })
@@ -552,7 +547,7 @@ export async function tellMeWhenHandler(
 export async function helpHandler(bot: SlackBot, message: CommandMessage) {
     const convo = await bot.startPrivateConversation([message.user])
     bot.say({
-        channel: convo.channel!.id!,
+        channel: convo.channel.id,
         text: formatHelpResponse(bot),
     })
 }
@@ -565,13 +560,13 @@ export async function listHandler(bot: SlackBot, message: CommandMessage) {
     return processSubscriptionListCommand(bot, message)
         .then(async (response) => {
             await bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: response,
             })
         })
         .catch((error) => {
             bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: "I'm sorry, but an error occurred processing this subscription command",
             })
             winston.error(JSON.stringify(error))
@@ -586,13 +581,13 @@ export async function removeHandler(bot: SlackBot, message: CommandMessage) {
     return processSubscriptionRemoveCommand(bot, message, message.matches[1])
         .then((response) => {
             bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: response,
             })
         })
         .catch((error) => {
             bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: "I'm sorry, but an error occurred processing this subscription command",
             })
             winston.error(JSON.stringify(error))
@@ -607,13 +602,13 @@ export async function subscribeTeams(bot: SlackBot, message: CommandMessage) {
     return processTeamSubscribeCommand(bot, message)
         .then((response) => {
             bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: response,
             })
         })
         .catch((error) => {
             bot.say({
-                channel: convo.channel!.id!,
+                channel: convo.channel.id,
                 text: "I'm sorry, but an error occurred processing this subscription command",
             })
             winston.error(JSON.stringify(error))

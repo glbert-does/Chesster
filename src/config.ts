@@ -229,8 +229,24 @@ export const LeagueDecoder: Decoder<League> = oneOf(
     LeagueWithAlternateDecoder,
     LeagueWithoutAlternateDecoder
 )
-export type SlackTokens = Record<string, string>
-export const SlackTokensDecoder: Decoder<SlackTokens> = dict(string())
+export interface SlackToken {
+    token: string
+    signingSecret: string
+    appToken: string
+}
+export const SlackTokenDecoder: Decoder<SlackToken> = object(
+    ['token', string()],
+    ['signingSecret', string()],
+    ['appToken', string()],
+    (token, signingSecret, appToken) => ({
+        token,
+        signingSecret,
+        appToken,
+    })
+)
+export type SlackTokens = Record<string, SlackToken>
+export const SlackTokensDecoder: Decoder<SlackTokens> = dict(SlackTokenDecoder)
+
 export interface Winston {
     domain: string
     channel: string

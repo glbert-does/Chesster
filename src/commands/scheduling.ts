@@ -659,14 +659,11 @@ export async function ambientScheduling(
                 leagueName,
             }
         )
-    } catch (error) {
-        // @ts-ignore - this was getting in my way when trying to build chesster locally
+    } catch (error: any) {
         if (error.code === 'not_found') {
             schedulingReplyMissingPairing(bot, message)
-            // @ts-ignore - this was getting in my way when trying to build chesster locally
         } else if (error.code === 'no_matching_rounds') {
             replyNoActiveRound(bot, message)
-            // @ts-ignore - this was getting in my way when trying to build chesster locally
         } else if (error.code === 'ambiguous') {
             schedulingReplyAmbiguous(bot, message)
         } else {

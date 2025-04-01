@@ -104,10 +104,9 @@ export function fetchURLIntoJSON(
                                 JSON.stringify(result.body)
                         )
                     }
-                } catch (e) {
+                } catch (e: any) {
                     winston.error('[HTTP] Options: ' + JSON.stringify(options))
                     winston.error('[HTTP] Exception: ' + e)
-                    // @ts-ignore - this was getting in my way when trying to build chesster locally
                     winston.error('[HTTP] Stack: ' + e.stack)
                     winston.error('[HTTP] Body: ' + result.body)
                     winston.error(

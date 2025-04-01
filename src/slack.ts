@@ -3,19 +3,12 @@
 // -----------------------------------------------------------------------------
 import { App } from '@slack/bolt'
 
-// Load environment variables; don't delete this
-// This is particularly for Events API stuff
-import dotenv from 'dotenv'
-dotenv.config({
-    path: './local.env',
-})
-
 import {
     WebClient,
     WebAPICallResult,
     ChatPostMessageArguments,
 } from '@slack/web-api'
-import _ from 'lodash'
+import _, { update } from 'lodash'
 import * as winston from 'winston'
 import moment from 'moment'
 
@@ -601,10 +594,11 @@ export class SlackEntityLookup<SlackEntity extends SlackEntityWithNameAndId> {
     }
 }
 
+export type SlackName = 'forwarding' | 'lichess4545'
+
 export class SlackBot {
     private log: LogWithPrefix
     public config: config.ChessterConfig
-    private token: string
     public users: SlackEntityLookup<LeagueMember>
     public channels: SlackEntityLookup<SlackChannel>
     // public rtm: RTMClient
@@ -616,7 +610,7 @@ export class SlackBot {
     private app: App
 
     constructor(
-        public slackName: string,
+        public slackName: SlackName,
         public configFile = './config/config.js',
         public debug = false,
         public connectToModels = true,
@@ -628,33 +622,6 @@ export class SlackBot {
         this.config = config.ChessterConfigDecoder.decodeJSON(
             JSON.stringify(require(this.configFile))
         )
-
-        // Confusing naming; chesster is the name of adminSlack; lichess4545 is the name of actual chesster
-        // @ts-expect-error it thinks token can be undefined here but it's incorrect
-        this.token =
-            this.slackName === 'lichess4545'
-                ? process.env.SLACK_APP_TOKEN // Chesster bot token
-                : this.slackName === 'chesster'
-                ? process.env.CHESSTER_CHESSTER_SLACK_TOKEN // AdminSlack bot token'
-                : "It won't work without this"
-
-        if (!this.token) {
-            const error = `Failed to load token for ${this.slackName} from ${this.configFile}`
-            this.log.error(error)
-            throw new Error(error)
-        }
-
-        // Confusing naming conventions; chesster is the name of adminSlack; lichess4545 is the name of actual chesster
-        const signingSecret =
-            this.slackName === 'lichess4545'
-                ? process.env.SLACK_SIGNING_SECRET // Chesster
-                : process.env.ADMIN_SLACK_SIGNING_SECRET // AdminSlack
-
-        // Confusing naming conventions; chesster is the name of adminSlack; lichess4545 is the name of actual chesster
-        const appToken =
-            this.slackName === 'lichess4545'
-                ? process.env.SLACK_APP_TOKEN // Chesster
-                : process.env.ADMIN_SLACK_APP_TOKEN // adminSlack
 
         // May need changing with events API migration
         this.users = new SlackEntityLookup<LeagueMember>(
@@ -669,22 +636,19 @@ export class SlackBot {
             '#'
         )
 
-        // Naming conventions are confusing here
-        // chesster is the name of adminSlack; lichess4545 is the name of actual chesster
-        const botToken =
+        const tokens =
             this.slackName === 'lichess4545'
-                ? process.env.SLACK_APP_BOT_TOKEN // Chesster
-                : process.env.ADMIN_SLACK_BOT_TOKEN // adminSlack
+                ? this.config.slackTokens.lichess4545
+                : this.config.slackTokens.forwarding
 
-        this.web = new WebClient(botToken)
+        this.web = new WebClient(tokens.token)
 
         // TODO maybe these tokens should go in config or something?
         this.app = new App({
-            token: botToken,
-            signingSecret,
-            // Websocket that continously listens for events
+            token: tokens.token,
+            signingSecret: tokens.signingSecret,
             socketMode: true,
-            appToken,
+            appToken: tokens.appToken,
         })
     }
     async start() {
@@ -729,19 +693,6 @@ export class SlackBot {
             }
         } catch (error) {
             this.log.error(`Error getting bot info: ${error}`)
-        }
-
-        // Load users and channels THIRD
-        try {
-            this.log.info('Loading users...')
-            await this.updatesUsers()
-            this.log.info('Users loaded successfully')
-
-            this.log.info('Loading channels...')
-            await this.updateChannels()
-            this.log.info('Channels loaded successfully')
-        } catch (error) {
-            this.log.error(`Error loading users/channels: ${error}`)
         }
 
         // Set up event listeners LAST - after all data is loaded
@@ -800,7 +751,7 @@ export class SlackBot {
         // refresh your user and channel list every 10 minutes.
         // used to be every 2 minutes but we started to hit rate limits.
         // would be nice if this was push model, not poll but oh well.
-        await this.refresh(600 * SECONDS)
+        this.refresh(600 * SECONDS)
 
         if (this.logToThisSlack) {
             // setup logging
@@ -841,9 +792,9 @@ export class SlackBot {
         // @ https://api.slack.com/methods/users.list
         //
         // Iterate over all of the slack users and map them up
-        for await (const page of this.web.paginate(
-            'users.list'
-        ) as unknown as AsyncIterable<SlackUserListResponse>) {
+        for await (const page of this.web.paginate('users.list', {
+            limit: 1000,
+        }) as unknown as AsyncIterable<SlackUserListResponse>) {
             if (page.ok) {
                 page.members.map((slackUser) => {
                     newUsers.add({
@@ -874,21 +825,38 @@ export class SlackBot {
             this.channels.typePostfix,
             this.channels.idStringPrefix
         )
+        /* TODO: why wasn't this used?
         const newMPIMs = new SlackEntityLookup<SlackChannel>(
             this.channels.slackName,
             this.channels.typePostfix,
             this.channels.idStringPrefix
         )
-        // @ https://api.slack.com/methods/conversations.list
-        for await (const page of this.web.paginate('conversations.list', {
-            types: 'public_channel,private_channel',
-            exclude_archived: true,
-        }) as unknown as AsyncIterable<SlackChannelListResponse>) {
+        */
+        const updateChannels = (page) => {
             if (page.ok) {
                 page.channels.map((c) => {
                     if (c.is_channel) newChannels.add(c)
                 })
             }
+        }
+        this.log.info('Updating public channels!')
+        // @ https://api.slack.com/methods/conversations.list
+        for await (const page of this.web.paginate('conversations.list', {
+            types: 'public_channel',
+            exclude_archived: true,
+            limit: 200,
+        }) as unknown as AsyncIterable<SlackChannelListResponse>) {
+            updateChannels(page)
+        }
+
+        this.log.info('Updating private channels!')
+        // @ https://api.slack.com/methods/conversations.list
+        for await (const page of this.web.paginate('conversations.list', {
+            types: 'private_channel',
+            exclude_archived: true,
+            limit: 200,
+        }) as unknown as AsyncIterable<SlackChannelListResponse>) {
+            updateChannels(page)
         }
         this.channels = newChannels
     }
@@ -1017,15 +985,11 @@ ${usernames.join(', ')}`
             )
         }
         options.as_user = true
-        // Ensure attachments is always an array as required by Bolt's client
-        if (!options.attachments) {
-            options.attachments = []
-        }
 
         // @ts-ignore
         return this.app.client.chat.postMessage({
             ...options,
-            attachments: options.attachments ? options.attachments : [],
+            attachments: [],
             reply_broadcast: options.reply_broadcast
                 ? options.reply_broadcast
                 : false,

@@ -4,12 +4,21 @@ const dotenv = require('dotenv')
 dotenv.config()
 let db = require('./db.js')
 
-// These variables are unused but I'm too chicken to delete them
-let _4545_SLACK_TOKEN =
-    process.env.CHESSTER_4545_SLACK_TOKEN || "It won't work without this token"
-let CHESSTER_SLACK_TOKEN =
-    process.env.CHESSTER_CHESSTER_SLACK_TOKEN ||
+let LICHESS_4545_APP_TOKEN =
+    process.env.LICHESS_4545_APP_TOKEN || "It won't work without this token"
+let LICHESS_4545_SIGNING_SECRET =
+    process.env.LICHESS_4545_SIGNING_SECRET ||
     "It won't work without this token"
+let LICHESS_4545_BOT_TOKEN =
+    process.env.LICHESS_4545_BOT_TOKEN || "It won't work without this token"
+
+let FORWARD_APP_TOKEN =
+    process.env.FORWARD_APP_TOKEN || "It won't work without this token"
+let FORWARD_SIGNING_SECRET =
+    process.env.FORWARD_SIGNING_SECRET || "It won't work without this token"
+let FORWARD_BOT_TOKEN =
+    process.env.FORWARD_BOT_TOKEN || "It won't work without this token"
+
 let HELTOUR_TOKEN =
     process.env.CHESSTER_HELTOUR_TOKEN || "It won't work without this token"
 
@@ -26,8 +35,16 @@ var config = {
 
     // These are never actually used, the variables are accessed another way
     slackTokens: {
-        lichess4545: _4545_SLACK_TOKEN,
-        chesster: CHESSTER_SLACK_TOKEN,
+        lichess4545: {
+            token: LICHESS_4545_BOT_TOKEN,
+            signingSecret: LICHESS_4545_SIGNING_SECRET,
+            appToken: LICHESS_4545_APP_TOKEN,
+        },
+        forwarding: {
+            token: FORWARD_BOT_TOKEN,
+            signingSecret: FORWARD_SIGNING_SECRET,
+            appToken: FORWARD_APP_TOKEN,
+        },
     },
     winston: {
         domain: 'chesster',
@@ -63,8 +80,8 @@ var config = {
                 channel: 'team-games',
                 channelId: 'C0CSAHD43',
                 clock: {
-                    initial: 1,
-                    increment: 0,
+                    initial: 45,
+                    increment: 45,
                 },
                 rated: true,
                 variant: 'standard',
@@ -121,8 +138,8 @@ var config = {
                 channelId: 'C0SD3SCAH',
                 clock: {
                     // Events API TODO: Change time controls back from 1+0
-                    initial: 1,
-                    increment: 0,
+                    initial: 30,
+                    increment: 30,
                 },
                 rated: true,
                 variant: 'standard',
@@ -222,14 +239,14 @@ var config = {
             },
             results: {
                 channel: 'chess960games',
-                channelId: 'C08KHN4FTUY',
+                channelId: 'CAG3R6HL6',
             },
             gamelinks: {
                 channel: 'chess960games',
-                channelId: 'C08KHN4FTUY',
+                channelId: 'CAG3R6HL6',
                 clock: {
-                    initial: 1,
-                    increment: 0,
+                    initial: 20,
+                    increment: 20,
                 },
                 rated: true,
                 variant: 'chess960',

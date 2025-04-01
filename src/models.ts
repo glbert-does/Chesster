@@ -96,9 +96,11 @@ export async function connect(config: ChessterConfig) {
         )
     }
 
-    // TODO Events Api: This path will obviously have to be changed in prod, this is my local path
     const sequelize = new Sequelize(
-        'sqlite:/Users/a/Documents/personalprojects/chessterstuff/Chesster/chesster.db.sqlite'
+        config.database.name,
+        config.database.username,
+        config.database.password,
+        { ...config.database, dialect: 'postgres' }
     )
 
     try {

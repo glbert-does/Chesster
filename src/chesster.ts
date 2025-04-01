@@ -33,7 +33,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 const adminSlack = new slack.SlackBot(
-    'chesster', // slackName
+    'forwarding', // slackName
     configFile, // configFile
     false, // debug
     false, // connectToModels
@@ -93,7 +93,6 @@ directRequiresLeague(
 )
 
 // availability
-// Events migration difficulty: 1/5. Bot.reply and bot.getSlackUserFromNameOrID
 chesster.hears({
     type: 'league_command',
     patterns: [/available/i, /unavailable/i],
@@ -102,7 +101,6 @@ chesster.hears({
 })
 
 // alternate assignment
-// Events migration difficulty: 1/5. Bot.reply and bot.getSlackUserFromNameOrID
 chesster.hears({
     type: 'league_command',
     patterns: [/^assign/i],
@@ -111,7 +109,6 @@ chesster.hears({
 })
 
 // alternate unassignment
-// Events API migration difficulty: 1/5. Bot.reply and bot.getSlackUserFromNameOrID
 chesster.hears({
     type: 'league_command',
     patterns: [/^unassign/i],
@@ -119,7 +116,6 @@ chesster.hears({
     callback: availability.unassignAlternate,
 })
 
-// Events API migration difficulty: 1/5. Bot.reply
 // Message Forwarding
 adminSlack.hears({
     type: 'command',
@@ -127,7 +123,6 @@ adminSlack.hears({
     messageTypes: ['direct_mention', 'bot_message'],
     callback: messageForwarding.forwardMessage(chesster, adminSlack),
 })
-// Events API migration difficulty: 1/5. See above
 adminSlack.hears({
     type: 'command',
     patterns: [/^refresh/i],
@@ -220,6 +215,8 @@ chesster.hears({
     patterns: [/^commands/i, /^command list/i, /^help$/i],
     messageTypes: ['direct_mention', 'direct_message'],
     callback: async (bot: slack.SlackBot, message: slack.CommandMessage) => {
+        console.log(message)
+        console.log(message.user)
         const convo = await bot.startPrivateConversation([message.user])
         bot.say({
             channel: convo.channel!.id!,

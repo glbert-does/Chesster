@@ -144,9 +144,8 @@ const { makeRequest, startRequests, stopRequests } = (() => {
                                 }
                             }
                             setTimeout(processRequests, requestDelay)
-                        } catch (e) {
+                        } catch (e: any) {
                             winston.error('[LICHESS] Exception: ' + e)
-                            // @ts-ignore - this was getting in my way when trying to build chesster locally
                             winston.error('[LICHESS] Stack: ' + e.stack)
                             winston.error('[LICHESS] URL: ' + url)
                             reject(e)
@@ -161,9 +160,8 @@ const { makeRequest, startRequests, stopRequests } = (() => {
                         reject(error)
                     }
                 )
-            } catch (e) {
+            } catch (e: any) {
                 winston.error('[LICHESS] Exception: ' + e)
-                // @ts-ignore - this was getting in my way when trying to build chesster locally
                 winston.error('[LICHESS] Stack: ' + e.stack)
                 reject(e)
                 setTimeout(processRequests, requestDelay)

@@ -212,8 +212,6 @@ chesster.hears({
     patterns: [/^commands/i, /^command list/i, /^help$/i],
     messageTypes: ['direct_mention', 'direct_message'],
     callback: async (bot: slack.SlackBot, message: slack.CommandMessage) => {
-        console.log(message)
-        console.log(message.user)
         const convo = await bot.startPrivateConversation([message.user])
         bot.say({
             channel: convo.channel!.id!,

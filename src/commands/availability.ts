@@ -1,7 +1,6 @@
 // -----------------------------------------------------------------------------
 // Commands related to availability
 
-// Events API migration difficulty: 1/5 I think. Just get users by slack ID name etc, and bot.reply
 // -----------------------------------------------------------------------------
 import winston from 'winston'
 import _ from 'lodash'

@@ -279,7 +279,7 @@ export interface MemberJoinedChannel {
     channel: string
     channel_type: string
     team: string
-    inviter: string
+    inviter?: string
 }
 export type OnEvent = MemberJoinedChannel
 export function isMemberJoinedChannelEvent(
@@ -643,7 +643,6 @@ export class SlackBot {
 
         this.web = new WebClient(tokens.token)
 
-        // TODO maybe these tokens should go in config or something?
         this.app = new App({
             token: tokens.token,
             signingSecret: tokens.signingSecret,
@@ -703,54 +702,10 @@ export class SlackBot {
 
         this.app.logger.info('Starting app')
 
-        // Connect to Slack
-        // const { self, team } = await this.rtm.start()
-        // this.controller = self as SlackBotSelf
-        // this.team = team as SlackTeam
-
-        // Listen to events that we need
-        // https://api.slack.com/events
-        // this.rtm.on('goodbye', () => {
-        //     // TODO: figure out how to better handle this
-        //     this.log.error(
-        //         'RTM connection closing unexpectedly. I am going down.'
-        //     )
-        //     process.exit(1)
-        // })
-
-        // -----------------------------------------------------------------------------
-        // Log lifecycle events
-        // this.rtm.on('connecting', () => {
-        //     this.log.info('Connecting')
-        // })
-        // this.rtm.on('authenticated', (connectData) => {
-        //     this.log.info(`Authenticating: ${JSON.stringify(connectData)}`)
-        // })
-        // this.rtm.on('connected', () => {
-        //     this.log.info('Connected')
-        // })
-        // this.rtm.on('ready', () => {
-        //     this.log.info('Ready')
-        // })
-        // this.rtm.on('disconnecting', () => {
-        //     this.log.info('Disconnecting')
-        // })
-        // this.rtm.on('reconnecting', () => {
-        //     this.log.info('Reconnecting')
-        // })
-        // this.rtm.on('disconnected', (error) => {
-        //     this.log.error(`Disconnecting: ${JSON.stringify(error)}`)
-        // })
-        // this.rtm.on('error', (error) => {
-        //     this.log.error(`Error: ${JSON.stringify(error)}`)
-        // })
-        // this.rtm.on('unable_to_rtm_start', (error) => {
-        //     this.log.error(`Unable to RTM start: ${JSON.stringify(error)}`)
-        // })
-
         // refresh your user and channel list every 10 minutes.
         // used to be every 2 minutes but we started to hit rate limits.
         // would be nice if this was push model, not poll but oh well.
+        // NOTE: This is intentionally not awaited now, assuming that we want to startup more quickly
         this.refresh(600 * SECONDS)
 
         if (this.logToThisSlack) {
@@ -793,7 +748,7 @@ export class SlackBot {
         //
         // Iterate over all of the slack users and map them up
         for await (const page of this.web.paginate('users.list', {
-            limit: 1000,
+            limit: 200,
         }) as unknown as AsyncIterable<SlackUserListResponse>) {
             if (page.ok) {
                 page.members.map((slackUser) => {
@@ -832,7 +787,7 @@ export class SlackBot {
             this.channels.idStringPrefix
         )
         */
-        const updateChannels = (page) => {
+        const updateChannels = (page: SlackChannelListResponse) => {
             if (page.ok) {
                 page.channels.map((c) => {
                     if (c.is_channel) newChannels.add(c)
@@ -986,7 +941,6 @@ ${usernames.join(', ')}`
         }
         options.as_user = true
 
-        // @ts-ignore
         return this.app.client.chat.postMessage({
             ...options,
             attachments: [],
@@ -995,6 +949,7 @@ ${usernames.join(', ')}`
                 : false,
             thread_ts: options.thread_ts ? options.thread_ts : '',
             as_user: true,
+            icon_url: undefined,
             icon_emoji: undefined,
         })
     }
@@ -1072,13 +1027,6 @@ ${usernames.join(', ')}`
                     listener.type === 'command' &&
                     allowedTypes.indexOf('command') !== -1
                 ) {
-                    // IMPORTANT FIX: Log before callback
-                    this.log.info(
-                        `Executing command callback for pattern: ${listener.patterns
-                            .map((p) => p.source)
-                            .join(', ')}`
-                    )
-
                     // Run any middleware first
                     if (listener.middleware) {
                         listener.middleware.forEach((m) =>
@@ -1096,13 +1044,6 @@ ${usernames.join(', ')}`
                     allowedTypes.indexOf('league_command') !== -1
                 ) {
                     if (_league && member) {
-                        // SAME FIX HERE
-                        this.log.info(
-                            `Executing league_command callback for pattern: ${listener.patterns
-                                .map((p) => p.source)
-                                .join(', ')}`
-                        )
-
                         // Run middleware first
                         if (listener.middleware) {
                             listener.middleware.forEach((m) => m(this, message))
@@ -1154,18 +1095,24 @@ ${usernames.join(', ')}`
         }
     }
 
-    // Events API migration notes:
-    // This function does the following (per Lakin):
-    // Gets info about the channel of the message
-    // Makes a chessterMessage object with our data in it.
-    // Checks a bunch of attributes is it a bot? is it a DM?
-    // Then it routes the message to the appropriate "listener"
-    // The listener concept is just the idea of a callback.
     async startOnListener() {
         // Set up event handler for direct messages and ambient messages
         // Messages that ping chesster directly are handled in `this.app.event('app_mention', ...)`
-        this.app.message(/.*/, async ({ message, say, context }) => {
+        this.app.message(/.*/, async ({ message, say }) => {
             try {
+                // TODO: this should be handled better
+                if (message.subtype === 'message_changed') return
+                if (message.subtype === 'message_deleted') return
+                if (message.subtype === 'message_replied') return
+                if (message.subtype === 'channel_archive') return
+                if (message.subtype === 'channel_unarchive') return
+                if (message.subtype === 'channel_join') return
+                if (message.subtype === 'channel_leave') return
+                if (message.subtype === 'channel_name') return
+                if (message.subtype === 'channel_posting_permissions') return
+                if (message.subtype === 'channel_purpose') return
+                if (message.subtype === 'channel_topic') return
+                if (message.subtype === 'ekm_access_denied') return
                 const channel = await this.getChannel(message.channel)
                 if (!channel) {
                     this.log.warn(
@@ -1174,9 +1121,8 @@ ${usernames.join(', ')}`
                     return
                 }
 
-                // @ts-expect-error user exists on message
-                const user = message.user
-                // @ts-expect-error text exists on message
+                // TODO: This should be handled better.
+                const user = message.user || ''
                 const text = message.text || ''
 
                 const chessterMessage: ChessterMessage = {
@@ -1185,7 +1131,7 @@ ${usernames.join(', ')}`
                     channel,
                     text,
                     ts: message.ts,
-                    // @ts-ignore
+                    // @ts-ignore TODO: fix this.
                     attachments: message.attachments || [],
                     isPingModerator: false,
                 }
@@ -1193,9 +1139,7 @@ ${usernames.join(', ')}`
                 // Message context
                 const isDirectMessage = channel?.is_im && !channel?.is_group
                 const isAmbient = !isDirectMessage
-                const isBotMessage =
-                    // @ts-expect-error these properties exist on the message
-                    message.subtype === 'bot_message' || message.bot_id
+                const isBotMessage = message.subtype === 'bot_message'
 
                 this.log.debug(
                     `Message context: DM=${isDirectMessage}, ambient=${isAmbient}, bot=${isBotMessage}`
@@ -1353,7 +1297,6 @@ ${usernames.join(', ')}`
     on(options: OnOptions) {
         if (options.event === 'member_joined_channel') {
             this.app.event('member_joined_channel', async ({ event }) => {
-                // @ts-ignore hope I don't regret this lol
                 options.callback(this, event)
             })
         }

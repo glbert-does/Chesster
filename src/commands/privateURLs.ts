@@ -1,7 +1,5 @@
 // -----------------------------------------------------------------------------
 // Commands related to game nomination
-
-// Events API migration difficulty: 1/5, just bot.reply
 // -----------------------------------------------------------------------------
 import _ from 'lodash'
 import * as heltour from '../heltour'

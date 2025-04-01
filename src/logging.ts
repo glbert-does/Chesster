@@ -30,7 +30,7 @@ export default class Slack extends Transport {
         public channel: string,
         // public domain: string,
         public username: string,
-        public level?: string,
+        public level?: 'error' | 'warning' | 'info' | 'debug',
         public handleExceptions?: boolean,
         public silent?: boolean,
         public format?: logform.Format

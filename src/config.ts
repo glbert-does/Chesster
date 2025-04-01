@@ -251,7 +251,7 @@ export interface Winston {
     domain: string
     channel: string
     username: string
-    level: string
+    level: 'error' | 'warning' | 'info' | 'debug'
     handleExceptions: boolean
 }
 export const WinstonDecoder: Decoder<Winston> = object(
@@ -264,7 +264,7 @@ export const WinstonDecoder: Decoder<Winston> = object(
         domain,
         channel,
         username,
-        level,
+        level: level as 'error' | 'warning' | 'info' | 'debug',
         handleExceptions,
     })
 )

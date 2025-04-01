@@ -373,7 +373,7 @@ async function heltourApiCall<T extends object>(
             throw error
         }
     } catch (e) {
-        console.log(`[HELTOUR] Unable to connect: ${e}`)
+        winston.error(`[HELTOUR] Unable to connect: ${e}`)
         throw e
     }
 }
